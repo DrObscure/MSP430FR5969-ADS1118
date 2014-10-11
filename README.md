@@ -8,12 +8,11 @@ The code no longer uses the Grace graphical tools, but instead uses the DriverLi
 
 The code is written for the Code Composer Studio 6.0.1
 
-This version of the code follows the original example closely with the following exceptions/additions:\  
-
-  The pinouts from the original launchpad were changed on the FR5969 board
-  SW1 on the launchpad is used to switch between CH0 and CH1 inputs to the ADS1118
-  The internal RTC in the FR5969 is used for the current time (24 hour clock)
-  A temp/time feed is output through the UART to the PC at 9600/8/1, every .5 sec
+This version of the code follows the original example closely with the following exceptions/additions:   
+-- The pinouts from the original launchpad were changed on the FR5969 board 
+-- SW1 on the launchpad is used to switch between CH0 and CH1 inputs to the ADS1118 
+-- The internal RTC in the FR5969 is used for the current time (24 hour clock) 
+-- A temp/time feed is output through the UART to the PC at 9600/8/1, every .5 sec
      
 Otherwise, the operation is as follows:\
 

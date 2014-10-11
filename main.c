@@ -95,8 +95,7 @@ volatile unsigned int  flag;		//global flag.
 volatile unsigned char Thr_state;	// state for threshold temperature setting state machine.
 volatile unsigned char time_state;	// state for time setting state machine.
 
-Calendar calendar;      // Calendar used for RTC
-unsigned long time = 0;	// current time, a Continuous number seconds
+Calendar calendar;      // Global Calendar used for RTC
 unsigned int set_time;	// temporary for setting time
 unsigned int Thr_temp;	// Threshold temperature in degrees Centigrade
 unsigned int set_temp;	// temporary for setting Threshold temperature
@@ -193,14 +192,17 @@ int main(int argc, char *argv[])
    			}
    		}
 
-   		if((flag & BIT2) && (!Thr_state))			// if SW2 is pushed, and Thr_state = 0, time setting state machine will be changed
+   		if((flag & BIT2) && (!Thr_state))		// if SW2 is pushed, and Thr_state = 0, time setting state machine will be changed
    		{
-   			flag &= ~ BIT2;							// flag is reset
+   			flag &= ~ BIT2;						// flag is reset
 
 			if(time_state >= 2)					// if in state 2, change to state 0;
 			{
 				time_state = 0;
-				time_display();		// display setting time
+				calendar = RTC_B_getCalendarTime (RTC_B_BASE); // load global calendar values
+				calendar.Seconds = 0x00;		// reset seconds for accurate set
+				RTC_B_calendarInit(RTC_B_BASE, calendar, RTC_B_FORMAT_BCD);
+				time_display();					// display setting time
 			}
 			else
 			{
@@ -273,18 +275,17 @@ void ADC_display()
 void time_display()
 {
 	char data[10] = "";
-	Calendar currTime;
-	unsigned int i, sec, mn, hr = 0;
+	unsigned int i;
 
-	currTime = RTC_B_getCalendarTime (RTC_B_BASE);
-	data[0] = ((currTime.Hours & 0xF0)>>4) + 0x30;
-	data[1]  = (currTime.Hours & 0x0F) + 0x30;
+	calendar = RTC_B_getCalendarTime (RTC_B_BASE);
+	data[0] = ((calendar.Hours & 0xF0)>>4) + 0x30;
+	data[1]  = (calendar.Hours & 0x0F) + 0x30;
 	data[2] = ':';
-	data[3] = ((currTime.Minutes & 0xF0)>>4) + 0x30;
-	data[4] = (currTime.Minutes & 0x0F) + 0x30;
+	data[3] = ((calendar.Minutes & 0xF0)>>4) + 0x30;
+	data[4] = (calendar.Minutes & 0x0F) + 0x30;
 	data[5] = ':';
-	data[6] = ((currTime.Seconds & 0xF0)>>4) + 0x30;
-	data[7] = (currTime.Seconds & 0x0F) + 0x30;
+	data[6] = ((calendar.Seconds & 0xF0)>>4) + 0x30;
+	data[7] = (calendar.Seconds & 0x0F) + 0x30;
 
 	for(i=0; i<8; i++)
 	{
@@ -294,19 +295,6 @@ void time_display()
 	//================
 	flag &= ~BIT3;						// flag is reset
 
-/***
-	// format to seconds for LCD routine
-	hr  = (currTime.Hours & 0x0F)   + ((currTime.Hours & 0xF0)>>4) * 10;
-	mn  = (currTime.Minutes & 0x0F) + ((currTime.Minutes & 0xF0)>>4) * 10;
-	sec = (currTime.Seconds & 0x0F) + ((currTime.Seconds & 0xF0)>>4) * 10;
-
-	time = hr*3600 + mn*60 + sec;
-
-	//================
-	flag &= ~BIT3;						// flag is reset
-
-	LCD_display_time(0,8,time);		// display time on LCD
-***/
 }
 
 void xmitTemp(void)
@@ -315,19 +303,17 @@ void xmitTemp(void)
 	// temp info
 	int i,j,k,l;
 	signed int numx = Act_temp;
-	// time/date info
-	Calendar currTime;
 
 	// first a time stamp
-	currTime = RTC_B_getCalendarTime (RTC_B_BASE);
-	data[0] = ((currTime.Hours & 0xF0)>>4) + 0x30;
-	data[1]  = (currTime.Hours & 0x0F) + 0x30;
+	calendar = RTC_B_getCalendarTime (RTC_B_BASE);
+	data[0] = ((calendar.Hours & 0xF0)>>4) + 0x30;
+	data[1]  = (calendar.Hours & 0x0F) + 0x30;
 	data[2] = ':';
-	data[3] = ((currTime.Minutes & 0xF0)>>4) + 0x30;
-	data[4] = (currTime.Minutes & 0x0F) + 0x30;
+	data[3] = ((calendar.Minutes & 0xF0)>>4) + 0x30;
+	data[4] = (calendar.Minutes & 0x0F) + 0x30;
 	data[5] = ':';
-	data[6] = ((currTime.Seconds & 0xF0)>>4) + 0x30;
-	data[7] = (currTime.Seconds & 0x0F) + 0x30;
+	data[6] = ((calendar.Seconds & 0xF0)>>4) + 0x30;
+	data[7] = (calendar.Seconds & 0x0F) + 0x30;
 	data[8] = 0x20;
 	data[9] = '*';
 	data[10] = 0x20;
@@ -496,6 +482,8 @@ void set_Time()
  */
 void set_Thrtemp()
 {
+	set_temp = Thr_temp;
+
 	if (Thr_state == 0x01)
 	{
 		if (set_temp/100 == 9)
@@ -531,6 +519,8 @@ void set_Thrtemp()
 	}
 	else
 	__no_operation();
+
+	Thr_temp = set_temp;
 }
 
 
@@ -546,6 +536,7 @@ void System_Initial()
 	time_state = 0;	//time setting state machine counter
 	Thr_temp = 100; //configure threshold temperature to 100;
 	Act_temp = 0;
+	set_temp = Thr_temp; // set for future use in changing values
 
 	// IO initial
 	P1OUT |= BIT5; // CS off for LCD
@@ -558,8 +549,8 @@ void System_Initial()
 
 	LCD_init();						// LCD initial
 	LCD_clear();					// LCD clear
-	LCD_display_string(0,"TH:\0");	// display "ADS1118"
-	LCD_display_time(0,8,time);		// display current time
+	LCD_display_string(0,"Th:\0");	// display "ADS1118"
+	time_display();					// display current time
 	LCD_display_string(1,"Temp:        CH0\0");	// display threshold temp and actual temp;
 	LCD_display_char(1,10,0xDF);
 	LCD_display_char(1,11,'F');
